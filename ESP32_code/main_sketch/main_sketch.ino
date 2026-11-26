@@ -1,8 +1,15 @@
-/*  ----------- KEYPAD CODE
-
-
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include "secrets.h"
 #include <Keypad.h>
 
+
+// Configure GPIO pins
+const int RedLedPin = 4;  
+const int GreenLedPin = 16;  
+const int YellowLedPin = 17;
+
+// Configure keypad
 const byte ROWS = 4; //four rows
 const byte COLS = 4; //four columns
 
@@ -20,80 +27,73 @@ byte colPins[COLS] = {27,26,25,33}; //connect to the column pinouts of the keypa
 //initialize an instance of class NewKeypad
 Keypad customKeypad = Keypad( makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS); 
 
-void setup(){
-  Serial.begin(9600);
-}
-  
-void loop(){
-  char customKey = customKeypad.getKey();
-  
-  if (customKey){
-    Serial.println(customKey);
+// Store user input from the keypad
+String inputAccessCode;
+
+// Function to send HTTP GET request to check the access code
+void sendRequest(String accessCode) {
+  HTTPClient http;
+  http.begin(url+accessCode);
+
+  int statusCode = http.GET();
+  if (statusCode == 200) {
+    Serial.printf("GET success:");
+    // Access code is correct, turn on the green LED for 5 seconds
+    digitalWrite(RedLedPin, LOW);
+    digitalWrite(GreenLedPin, HIGH);
+    delay(5000);
+    digitalWrite(GreenLedPin, LOW);
+    digitalWrite(RedLedPin, HIGH);
+  } else {
+    Serial.printf("GET failed: %s\n", http.errorToString(statusCode).c_str());
+    // Access code is incorrect, turn on the yellow LED for 5 seconds
+    digitalWrite(RedLedPin, LOW);
+    digitalWrite(YellowLedPin, HIGH);
+    delay(5000);
+    digitalWrite(YellowLedPin, LOW);
+    digitalWrite(RedLedPin, HIGH);
   }
+  Serial.println();
+
+  http.end();
 }
-
-
-*/
-
-
-
-/*
-  ----------- LED BLINK CODE
-
-// Configure GPIO pins
-const int RedLedPin = 4;  
-const int GreenLedPin = 16;  
-const int YellowLedPin = 17;  
 
 void setup() {
+  Serial.begin(9600);
+
+  // configure the LEDs and start with the RED LED on
   pinMode(RedLedPin, OUTPUT);
   pinMode(GreenLedPin, OUTPUT);
   pinMode(YellowLedPin, OUTPUT);
-}
 
-void loop() {
-  digitalWrite(RedLedPin, HIGH);  
-  digitalWrite(GreenLedPin, HIGH);
-  digitalWrite(YellowLedPin, HIGH);
-  delay(1000);                 // Wait 1 second (1000 ms)
-  digitalWrite(RedLedPin, LOW); 
-  digitalWrite(GreenLedPin, LOW);
-  digitalWrite(YellowLedPin, LOW);  
-  delay(1000);                 // Wait 1 second (1000 ms)
-}
+  digitalWrite(RedLedPin, HIGH);
 
-*/
-
-#include <WiFi.h>
-#include <HTTPClient.h>
-#include "secrets.h"
-
-
-void setup() {
-  Serial.begin(9600);
-
+  // Connect esp32 to Wi-Fi 
   WiFi.begin(ssid, password);
   Serial.print("Connecting to Wi-Fi");
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
-  Serial.println("\nWi-Fi connected");
-
-  HTTPClient http;
-  http.begin(url);
-
-  int statusCode = http.GET();
-  if (statusCode > 0) {
-    Serial.printf("HTTP status: %d\n", statusCode);
-    Serial.println("Response:");
-    Serial.println(http.getString());
-  } else {
-    Serial.printf("GET failed: %s\n", http.errorToString(statusCode).c_str());
-  }
-
-  http.end();
+  Serial.println("\nWi-Fi connected");  
 }
 
 void loop() {
+  // Read the keypad input
+  char customKey = customKeypad.getKey();
+  if (customKey != NO_KEY) {
+    if (customKey == '#') {  
+      // # submits the code
+      Serial.println(inputAccessCode);
+
+      sendRequest(inputAccessCode);
+
+      inputAccessCode = "";  // clear for the next entry
+    } else if (customKey == '*') {  
+      // * clears the input
+      inputAccessCode = "";
+    } else {
+      inputAccessCode += customKey;
+    }
+  }
 }
